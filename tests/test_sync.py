@@ -728,6 +728,9 @@ class TestFMPFetcherNormalise:
 
         assert len(captured_requests) == 1
         req = captured_requests[0]
+        assert req.full_url.startswith(
+            "https://financialmodelingprep.com/stable/economic-calendar?"
+        )
         assert "apikey=secret123" in req.full_url, (
             f"API key should be in query params, got URL: {req.full_url}"
         )

@@ -1,7 +1,7 @@
 """Fetcher for Financial Modeling Prep (FMP) economic calendar.
 
 Requires a paid API key set via the ``FMP_API_KEY`` environment variable.
-Endpoint: ``https://financialmodelingprep.com/api/v3/economic_calendar``
+Endpoint: ``https://financialmodelingprep.com/stable/economic-calendar``
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from ..models import EconomicEvent
 from .base import BaseFetcher
 
-_FMP_BASE = "https://financialmodelingprep.com/api/v3/economic_calendar"
+_FMP_BASE = "https://financialmodelingprep.com/stable/economic-calendar"
 
 # HTTP status codes worth retrying (rate-limit and transient server errors)
 _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
