@@ -2,18 +2,24 @@
 
 > 🇯🇵 [日本語版 README はこちら](README.md)
 
-Automated weekly sync of high-impact economic calendar events into
-Google Calendar, powered by GitHub Actions.
+Automated weekly sync of high-impact economic calendar events into Google
+Calendar.
 
 Data sources are **pluggable** — switch providers by setting a single
 environment variable.  The default source
 ([ForexFactory](https://www.forexfactory.com/)) requires no API key.
 
+> **Recommended execution method:** Forex Factory currently rejects requests
+> from GitHub Actions with HTTP 403. FMP Economic Calendar requires a paid plan
+> and returns HTTP 402 with a free API key. Therefore, the recommended setup is
+> to fetch Forex Factory from a local machine and schedule it weekly with a
+> **systemd timer**. See [Running Forex Factory locally](#running-forex-factory-locally).
+
 ---
 
 ## Overview
 
-Every Monday morning (07:00 JST) the workflow fetches the next 4 weeks of
+Every Monday morning (07:00 JST), a local systemd timer or another configured scheduler fetches the next 4 weeks of
 economic events for configurable countries (default: `USD`, `JPY`, matching `TARGET_COUNTRIES`) and upserts
 them into a Google Calendar using a service account.  Duplicate prevention
 is handled via `extendedProperties` so repeated runs are idempotent.
@@ -23,7 +29,11 @@ is handled via `extendedProperties` so repeated runs are idempotent.
 | Name                    | Env var `EVENT_SOURCE`          | API key required? |
 |-------------------------|---------------------------------|-------------------|
 | Forex Factory           | `forexfactory` *(default)*      | No                |
-| Financial Modeling Prep | `fmp`                           | Yes (`FMP_API_KEY`) |
+| Financial Modeling Prep | `fmp`                           | **Paid plan required** (`FMP_API_KEY`) |
+
+> **FMP note:** Calling the Economic Calendar API with an FMP Basic free API
+> key returns HTTP 402 (Payment Required). A paid plan that includes Economic
+> Calendar access is required.
 
 > Adding a new source only requires implementing a small fetcher class in
 > `src/fetchers/` — see [Adding a new data source](#adding-a-new-data-source).
@@ -82,19 +92,25 @@ add the following secrets:
 |------------------------|------------------------------------------------------------|
 | `GOOGLE_SA_JSON`       | The **full contents** of the service account JSON key file |
 | `GOOGLE_CALENDAR_ID`   | The Calendar ID from step 3                                |
-| `CALENDAR_OWNER_EMAIL` | Your Google account email address (the account that receives notifications) |
+| `FMP_API_KEY`          | API key from a **paid plan** with Economic Calendar access (FMP only) |
 
 > **Note:** The default data source (ForexFactory) requires no API key.
 > If you switch to a source that needs one, add it to Secrets and pass it
 > as an environment variable in the workflow.
 
-> **⚠️ Notification timing:** Setting `CALENDAR_OWNER_EMAIL` alone does not configure the reminder times (40 min / 10 min before). Due to a Google Calendar API limitation, notification timing for invited events follows the user's own calendar settings.  
+> **⚠️ Notification timing:** Due to a Google Calendar API limitation, notification timing follows the user's own calendar settings.
+>
 > **Please set your reminders manually in Google Calendar:** Settings (⚙️) → select the calendar → Notifications → add 40 and 10 minutes.
 
 ### 5. Enable GitHub Actions
 
 After forking, GitHub Actions workflows may be disabled by default.
 Go to the **Actions** tab of your fork and click **"I understand my workflows, go ahead and enable them"**.
+
+> **Note:** Forex Factory currently rejects requests from GitHub Actions with
+> HTTP 403, so a local systemd timer is recommended for production use. Use
+> Actions only for testing or with a paid FMP plan that includes Economic
+> Calendar access.
 
 ---
 
@@ -108,12 +124,54 @@ env:
   EVENT_SOURCE: forexfactory   # change to another registered name
 ```
 
+The workflow currently included in this repository explicitly selects `fmp`.
+For local Forex Factory use, set only the local `.env` to `forexfactory`.
+
 ---
 
 ## Manual trigger
 
 Go to **Actions → Sync Economic Calendar → Run workflow** to trigger a run
 immediately without waiting for the weekly schedule.
+
+---
+
+## Running Forex Factory locally
+
+Forex Factory may return HTTP 403 for future-week scraping from GitHub Actions.
+It can work from a local machine, so use `EVENT_SOURCE=forexfactory` for local runs.
+
+Copy the environment template and fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+EVENT_SOURCE=forexfactory
+GOOGLE_CALENDAR_ID=xxxxxxxx@group.calendar.google.com
+GOOGLE_SA_JSON='{"type":"service_account", ...}'
+```
+
+Store the complete service-account JSON as one line. You can produce it with
+`jq -c . /path/to/service-account.json`. The application does not load `.env`
+automatically, so load it in the shell before running:
+
+```bash
+set -a
+source .env
+set +a
+uv run --frozen --extra scraping python -m src
+```
+
+Both `.env` and `service-account*.json` are ignored by Git. Never commit them.
+
+For scheduled Linux operation, prefer a systemd user timer over cron. Configure
+the service with the repository as `WorkingDirectory`, `.env` as
+`EnvironmentFile`, and the absolute path returned by `command -v uv` in
+`ExecStart`. Use `OnCalendar=Mon *-*-* 07:00:00` and `Persistent=true` in the
+timer. Do not enable both systemd and cron, and avoid running the GitHub Actions
+schedule at the same time.
 
 ---
 

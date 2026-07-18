@@ -1,1 +1,6 @@
 *.pyc
+.env
+.env.*
+!.env.example
+service-account*.json
+google.json

@@ -23,7 +23,7 @@ from .models import EconomicEvent
 # ---------------------------------------------------------------------------
 # ForexFactory uses currency codes (e.g. "USD", "JPY") as country identifiers.
 TARGET_COUNTRIES = {"USD", "JPY"}
-IMPORTANCE_MIN = 2                # 1=Low, 2=Medium, 3=High
+IMPORTANCE_MIN = 3                # 1=Low, 2=Medium, 3=High
 FETCH_WEEKS = 4                   # How many weeks ahead to fetch
 CALENDAR_TIMEZONE = "Asia/Tokyo"
 EVENT_DURATION_MINUTES = 30
