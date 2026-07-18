@@ -596,6 +596,48 @@ class TestValidateFFJsonSchema:
 class TestForexFactoryFetcherMCTTimeout:
     """Tests for the timeout guard around market-calendar-tool scrape."""
 
+    def test_fetch_mct_adapts_current_library_schema(self) -> None:
+        """Current market-calendar-tool fields should match the FF JSON schema."""
+        from types import SimpleNamespace
+
+        mock_df = MagicMock()
+        mock_df.empty = False
+        mock_df.to_dict.return_value = [
+            {
+                "id": 123,
+                "name": "Non Farm Payrolls",
+                "currency": "USD",
+                "datetime": datetime(2026, 7, 31, 12, 30, tzinfo=timezone.utc),
+                "impact": "high",
+                "forecast": "100K",
+                "previous": "90K",
+                "actual": None,
+            }
+        ]
+
+        mock_mct = MagicMock()
+        mock_mct.scrape_calendar.return_value = object()
+        mock_mct.clean_data.return_value = SimpleNamespace(base=mock_df)
+
+        with patch.dict("sys.modules", {"market_calendar_tool": mock_mct}):
+            result = ForexFactoryFetcher._fetch_mct("2026-07-18", "2026-08-15")
+
+        assert result == [
+            {
+                "id": "123",
+                "name": "Non Farm Payrolls",
+                "currency": "USD",
+                "datetime": datetime(2026, 7, 31, 12, 30, tzinfo=timezone.utc),
+                "impact": "high",
+                "forecast": "100K",
+                "previous": "90K",
+                "actual": None,
+                "title": "Non Farm Payrolls",
+                "country": "USD",
+                "date": "2026-07-31T12:30:00+00:00",
+            }
+        ]
+
     def test_fetch_mct_returns_empty_on_timeout(self, capsys) -> None:
         """_fetch_mct should return [] and log a warning when scrape times out."""
         from src.fetchers.forexfactory import ForexFactoryFetcher
@@ -612,7 +654,7 @@ class TestForexFactoryFetcherMCTTimeout:
 
         mock_mct = MagicMock()
         mock_mct.scrape_calendar = MagicMock()
-        mock_mct.clean_calendar_data = MagicMock()
+        mock_mct.clean_data = MagicMock()
 
         with (
             patch.dict("sys.modules", {"market_calendar_tool": mock_mct}),

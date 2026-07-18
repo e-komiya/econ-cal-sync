@@ -213,7 +213,7 @@ class ForexFactoryFetcher(BaseFetcher):
     def _fetch_mct(date_from: str, date_to: str) -> list[dict]:
         """Scrape ForexFactory via market-calendar-tool (optional dep)."""
         try:
-            from market_calendar_tool import scrape_calendar, clean_calendar_data
+            from market_calendar_tool import clean_data, scrape_calendar
         except ImportError:
             print(
                 "[forexfactory] market-calendar-tool not installed; "
@@ -223,11 +223,32 @@ class ForexFactoryFetcher(BaseFetcher):
 
         def _scrape() -> list[dict]:
             raw = scrape_calendar(date_from=date_from, date_to=date_to)
-            cleaned = clean_calendar_data(raw)
+            cleaned = clean_data(raw)
             df = cleaned.base
             if df is None or df.empty:
                 return []
-            return df.to_dict(orient="records")  # type: ignore[union-attr]
+
+            # market-calendar-tool 0.2.x uses a different schema from the
+            # official FF JSON feed. Convert it here so the shared filtering
+            # and normalisation path can handle events from both sources.
+            events: list[dict] = []
+            for record in df.to_dict(orient="records"):  # type: ignore[union-attr]
+                event = dict(record)
+                event["title"] = event.get("name") or ""
+                event["country"] = event.get("currency") or ""
+
+                event_datetime = event.get("datetime")
+                if event_datetime is not None:
+                    event["date"] = (
+                        event_datetime.isoformat()
+                        if hasattr(event_datetime, "isoformat")
+                        else str(event_datetime)
+                    )
+
+                if event.get("id") is not None:
+                    event["id"] = str(event["id"])
+                events.append(event)
+            return events
 
         try:
             with ThreadPoolExecutor(max_workers=1) as executor:
